@@ -2,6 +2,7 @@ local QBCore = exports['qb-core']:GetCoreObject()
 
 local showMenu = false
 local DynamicMenuItems = {}
+local AllowedActions = {}
 
 -- Keybind Lookup table
 local keybindControls = {
@@ -23,24 +24,48 @@ local MAX_MENU_ITEMS = 7
 ]]
 
 local function AddOption(data, id)
+    if type(data) ~= "table" or type(data.id) ~= "string" or type(data.title) ~= "string" or type(data.event) ~= "string" then
+        return nil
+    end
+
     local menuID = #DynamicMenuItems + 1
     local newItem = {}
     newItem.id = data.id
     newItem.title = data.title
-    newItem.icon = '#' ..data.icon
+    newItem.icon = data.icon and (data.icon:sub(1, 1) == "#" and data.icon or ("#" .. data.icon)) or "#question"
     newItem.functionName = data.event
-    newItem.eventType = data.type
+    newItem.eventType = data.type or "client"
     DynamicMenuItems[#DynamicMenuItems+1] = newItem
-    -- print(menuID)
     return menuID
 end
 
 local function RemoveOption(id)
-    DynamicMenuItems[id] = nil
+    if DynamicMenuItems[id] ~= nil then
+        table.remove(DynamicMenuItems, id)
+    end
 end
 
 exports('AddOption', AddOption)
 exports('RemoveOption', RemoveOption)
+
+local function IsMenuTogglePressed(primaryControl, secondaryControl)
+    return (IsControlPressed(1, primaryControl) or IsControlPressed(1, secondaryControl)) and GetLastInputMethod(2)
+end
+
+local function RegisterAllowedAction(item)
+    if type(item) ~= "table" then return end
+
+    if type(item.functionName) == "string" and item.functionName ~= "" then
+        local eventType = item.eventType or "client"
+        AllowedActions[eventType .. ":" .. item.functionName] = true
+    end
+
+    if type(item.items) == "table" then
+        for _, child in ipairs(item.items) do
+            RegisterAllowedAction(child)
+        end
+    end
+end
 
 -- Main thread
 Citizen.CreateThread(function()
@@ -49,13 +74,16 @@ Citizen.CreateThread(function()
     while true do
         Citizen.Wait(0)
         SetBigmapActive(false, false)
-        if IsControlPressed(1, keybindControls[keyBind]) or IsControlPressed(1, keybindControls[keyBind2]) and GetLastInputMethod(2) and showMenu then
+        local isMenuKeyPressed = IsMenuTogglePressed(keybindControls[keyBind], keybindControls[keyBind2])
+
+        if isMenuKeyPressed and showMenu then
             showMenu = false
             SetNuiFocus(false, false)
         end
-        if IsControlPressed(1, keybindControls[keyBind]) or IsControlPressed(1, keybindControls[keyBind2]) and GetLastInputMethod(2) then
+        if isMenuKeyPressed then
             showMenu = true
             local enabledMenus = {}
+            AllowedActions = {}
             for _, menuConfig in ipairs(rootMenuConfig) do
                 if menuConfig:enableMenu() then
                     local dataElements = {}
@@ -68,9 +96,12 @@ Citizen.CreateThread(function()
                             -- if newSubMenus[menuConfig.subMenus[i]] ~= nil and newSubMenus[menuConfig.subMenus[i]].enableMenu ~= nil and not newSubMenus[menuConfig.subMenus[i]]:enableMenu() then
                             --     goto continue
                             -- end
-                            currentElement[#currentElement+1] = newSubMenus[menuConfig.subMenus[i]]
-                            currentElement[#currentElement].id = menuConfig.subMenus[i]
-                            currentElement[#currentElement].enableMenu = nil
+                            local subMenu = newSubMenus[menuConfig.subMenus[i]]
+                            if subMenu ~= nil then
+                                currentElement[#currentElement+1] = subMenu
+                                currentElement[#currentElement].id = menuConfig.subMenus[i]
+                                currentElement[#currentElement].enableMenu = nil
+                            end
 
                             if i % MAX_MENU_ITEMS == 0 and i < (#menuConfig.subMenus - 1) then
                                 previousMenu[MAX_MENU_ITEMS + 1] = {
@@ -92,7 +123,7 @@ Citizen.CreateThread(function()
                                 items = currentElement
                             }
                         end
-                        dataElements = dataElements[MAX_MENU_ITEMS + 1].items
+                        dataElements = (dataElements[MAX_MENU_ITEMS + 1] and dataElements[MAX_MENU_ITEMS + 1].items) or {}
 
                     end
                     enabledMenus[#enabledMenus+1] = {
@@ -104,6 +135,8 @@ Citizen.CreateThread(function()
                     if hasSubMenus then
                         enabledMenus[#enabledMenus].items = dataElements
                     end
+
+                    RegisterAllowedAction(enabledMenus[#enabledMenus])
                 end
             end
 
@@ -116,6 +149,7 @@ Citizen.CreateThread(function()
                         eventType = v.eventType,
                         icon = v.icon,
                     }
+                    RegisterAllowedAction(enabledMenus[#enabledMenus])
                 end
             end
 
@@ -135,7 +169,7 @@ Citizen.CreateThread(function()
 
             while showMenu == true do Citizen.Wait(100) end
             Citizen.Wait(100)
-            while IsControlPressed(1, keybindControls[keyBind]) or IsControlPressed(1, keybindControls[keyBind2]) and GetLastInputMethod(2) do Citizen.Wait(100) end
+            while IsMenuTogglePressed(keybindControls[keyBind], keybindControls[keyBind2]) do Citizen.Wait(100) end
         end
     end
 end)
@@ -170,6 +204,12 @@ RegisterNUICallback('triggerAction', function(data, cb)
 
     -- Run command
     --ExecuteCommand(data.action)
+    local actionKey = data.eventType .. ":" .. tostring(data.action)
+    if not AllowedActions[actionKey] then
+        cb('ok')
+        return
+    end
+
     if data.eventType == "client" then
         TriggerEvent(data.action, data.parameters)
     elseif data.eventType == "server" then

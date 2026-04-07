@@ -120,7 +120,7 @@ rootMenuConfig =  {
             local inlaststand = Player.metadata["inlaststand"]
             local isdead = Player.metadata["isdead"]
 
-            return isPolice and not isDead and onduty
+            return isPolice and not isDead and onDuty
         end,
         subMenus = {"police:spawn1", "police:spawn2", "police:spawn3", "police:del"}
         },
@@ -148,7 +148,7 @@ rootMenuConfig =  {
         local inlaststand = Player.metadata["inlaststand"]
         local isdead = Player.metadata["isdead"]
 
-        return isTow and not isDead and onduty
+        return isTow and not isDead and onDuty
     end,
     subMenus = {"tow:togglenpc", "tow:vehicle"}
 },
@@ -162,7 +162,7 @@ rootMenuConfig =  {
         local inlaststand = Player.metadata["inlaststand"]
         local isdead = Player.metadata["isdead"]
 
-        return isTaxi and not isDead and onduty
+        return isTaxi and not isDead and onDuty
     end,
     subMenus = {"taxi:npc", "taxi-meter", "taxi:startmeter"}
 },
