@@ -2,9 +2,9 @@ local QBCore = exports['qb-core']:GetCoreObject()
 
 function isCloseVeh()
     local ped = PlayerPedId()
-    coordA = GetEntityCoords(ped, 1)
-    coordB = GetOffsetFromEntityInWorldCoords(ped, 0.0, 100.0, 0.0)
-    vehicle = getVehicleInDirection(coordA, coordB)
+    local coordA = GetEntityCoords(ped, 1)
+    local coordB = GetOffsetFromEntityInWorldCoords(ped, 0.0, 100.0, 0.0)
+    local vehicle = getVehicleInDirection(coordA, coordB)
     if DoesEntityExist(vehicle) and NetworkHasControlOfEntity(vehicle) then
         return true
     end
@@ -17,21 +17,24 @@ function getVehicleInDirection(coordFrom, coordTo)
 	local vehicle
 	for i = 0, 100 do
 		rayHandle = CastRayPointToPoint(coordFrom.x, coordFrom.y, coordFrom.z, coordTo.x, coordTo.y, coordTo.z + offset, 10, PlayerPedId(), 0)	
-		a, b, c, d, vehicle = GetRaycastResult(rayHandle)
+		local _, _, _, _, hitVehicle = GetRaycastResult(rayHandle)
+        vehicle = hitVehicle
 		offset = offset - 1
 		if vehicle ~= 0 then break end
 	end
+    if vehicle == 0 then
+        return 0
+    end
+
 	local distance = Vdist2(coordFrom, GetEntityCoords(vehicle))
 	if distance > 25 then vehicle = nil end
     return vehicle ~= nil and vehicle or 0
 end
 
-function hasEnoughOfItem(item)
-	local retval = false
+function hasEnoughOfItem(item, cb)
 	QBCore.Functions.TriggerCallback('QBCore:HasItem', function(result)
-		if result then
-			retval = true
-		end
-		return retval
+        if cb then
+            cb(result == true)
+        end
 	end, item)
 end
